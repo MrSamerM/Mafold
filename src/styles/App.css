@@ -1,0 +1,50 @@
+/* Reset */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(135deg, #FF6B35 0%, #FF8E53 50%, #FFA726 100%);
+  color: #333;
+  overflow-x: hidden;
+}
+
+.app {
+  display: flex;
+  min-height: 100vh;
+  flex-direction: row;
+  width: 100vw;
+  overflow-x: hidden;
+}
+
+.sidebar {
+  width: 25%;
+  flex-shrink: 0;
+}
+
+.main-content {
+  width: 75%;
+  display: flex;
+  min-height: 100vh;
+  padding: 2rem;
+  box-sizing: border-box;
+}
+
+
+/* Responsive: stack sidebar on top for small screens */
+@media (max-width: 768px) {
+  .app {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+  }
+
+  .main-content {
+    width: 100%;
+  }
+}

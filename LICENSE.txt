@@ -1,0 +1,4 @@
+Tabler Icons
+Copyright © 2023+ the Tabler Authors
+License: MIT (https://github.com/tabler/tabler-icons/blob/master/LICENSE)
+Source: https://tabler.io/icons
