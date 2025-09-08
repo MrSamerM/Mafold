@@ -76,22 +76,22 @@ def pick_folder():
 
 @app.post("/save-folder/", response_model=schemas.Folder)
 def save_folder(folder_in: schemas.FolderCreate, db: Session = Depends(get_db)):
-    # 1️⃣ Check if folder_path already exists
+    # Check if folder_path already exists
     existing_folder = db.query(models.Folder).filter(models.Folder.folder_path == folder_in.folder_path).first()
     if existing_folder:
         raise HTTPException(status_code=400, detail="Folder with this path already exists.")
 
-    # 2️⃣ Create folder
+    # Create folder
     db_folder = models.Folder(
         folder_name=folder_in.folder_name,
         folder_path=folder_in.folder_path
     )
 
-    # 3️⃣ Add nested requirements if any
+    # Add nested requirements if any
     for r in folder_in.requirements:
         db_folder.requirements.append(models.Requirement(description=r.description))
 
-    # 4️⃣ Save to database
+    # Save to database
     db.add(db_folder)
     try:
         db.commit()
@@ -107,6 +107,40 @@ def save_folder(folder_in: schemas.FolderCreate, db: Session = Depends(get_db)):
 def get_folders(db: Session = Depends(get_db)):
     folders = db.query(models.Folder).all()
     return folders
+
+@app.put("/edit/{folder_id}")
+async def update_folder(folder_id: int,folder_in: schemas.FolderCreate,db: Session = Depends(get_db)):
+    
+    db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
+    if not db_folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    
+    db_folder.folder_name = folder_in.folder_name #replaces old folder name and path with new inputs
+    db_folder.folder_path = folder_in.folder_path
+
+    db_folder.requirements.clear() #removes the old requirements and makes a new one
+    for r in folder_in.requirements:
+        db_folder.requirements.append(models.Requirement(description=r.description))
+
+    try:
+        db.commit()
+        db.refresh(db_folder)
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+    return db_folder
+
+@app.delete("/delete/{folder_id}")
+async def delete_folder(folder_id: int,db: Session = Depends(get_db)):
+
+    db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
+    if not db_folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    
+    db.delete(db_folder)
+    db.commit()
+    return {"message": "Folder deleted successfully"}
     
 
 # uvicorn server:app --reload  to run fastAPI
