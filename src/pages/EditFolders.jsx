@@ -1,13 +1,41 @@
 import '../styles/EditFolders.css';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useParams } from 'react-router-dom';
+import { useNavigate } from "react-router-dom";
 
 
 export default function AddFolders() {
 
     const [folderName, setFolderName] = useState("");
     const [folderPath, setFolderPath] = useState("");
-    const [requirements, setRequirements] = useState(["", "", "", "", "", ""]);
+    const [requirements, setRequirements] = useState([]);
+
+    const { id } = useParams();
+    const navigate = useNavigate();
+
+
+    useEffect(() => {
+
+        const getFolderDetails = async () => {
+            const res = await axios.get(`http://localhost:8000/get/${id}`)
+            if (res.data) {
+                setFolderName(res.data.folder_name)
+                setFolderPath(res.data.folder_path)
+                if (res.data.requirements.length < 5) {
+                    setRequirements(res.data.requirements.map(req => req.description).concat(Array(5 - res.data.requirements.length).fill("")));
+                } else {
+                    setRequirements(res.data.requirements.map(req => req.description));
+                }
+
+                console.log(res.data);
+
+
+            };
+        }
+
+        getFolderDetails()
+    }, [])
 
     const handleSelection = async () => {
 
@@ -36,11 +64,9 @@ export default function AddFolders() {
         }
 
         try {
-            await axios.post('http://localhost:8000/save-folder', data)
+            await axios.put(`http://localhost:8000/edit/${id}`, data)
             alert("Folder saved to database!");
-            setFolderName("Must add a folder");
-            setFolderPath("");
-            setRequirements(["", "", "", "", "", ""]);
+            navigate(`/`);
 
         } catch (e) {
             console.log("Error when saving", e)

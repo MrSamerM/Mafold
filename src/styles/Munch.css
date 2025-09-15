@@ -1,7 +1,9 @@
+/* Page layout */
 .munch-page {
     display: flex;
     flex-direction: column;
     width: 100%;
+    font-family: Arial, sans-serif;
 }
 
 .page-header {
@@ -9,27 +11,75 @@
     background: transparent;
 }
 
+.page-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: white;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* Content box */
 .content-wrapper {
-    flex: 1;
     display: flex;
     justify-content: center;
     align-items: center;
     width: 100%;
+    margin-bottom: 2rem;
 }
 
 .content-area-box {
     background: rgba(255, 255, 255, 0.95);
     border-radius: 20px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
-    padding: 2rem;
-    min-width: 300px;
-    max-width: 600px;
-    text-align: center;
+    padding: 3rem;
+    width: 60%;
 }
 
-.page-title {
-    font-size: 2rem;
-    font-weight: 700;
+
+
+.file-details {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 1rem;
+    justify-content: center;
+}
+
+.file-details svg {
+    width: 24px;
+    height: 24px;
+    fill: yellow;
+    stroke: black;
+}
+
+.file-details label {
+    width: 200px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    /* truncate long names with ... */
+    font-weight: 500;
+    text-align: left;
+}
+
+.file-details button {
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: none;
+    background-color: #4f46e5;
     color: white;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.file-details button:hover {
+    background-color: #4338ca;
+}
+
+.select-files-header {
+    font-size: 3rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    margin-top: 1rem;
+    color: black;
 }

@@ -11,7 +11,6 @@ from database import SessionLocal, engine
 from sqlalchemy.exc import IntegrityError
 from typing import List
 
-
 load_dotenv()
 app = FastAPI()
 
@@ -32,6 +31,8 @@ def get_db():
         yield db #here yield make get_db a generator function
     finally:
         db.close() #after all is done, then it closes the db
+
+
 
 @app.get("/pick-folder")
 @app.get("/pick-folder")
@@ -141,6 +142,18 @@ async def delete_folder(folder_id: int,db: Session = Depends(get_db)):
     db.delete(db_folder)
     db.commit()
     return {"message": "Folder deleted successfully"}
+
+@app.get("/get/{folder_id}",response_model=schemas.Folder)
+async def delete_folder(folder_id: int,db: Session = Depends(get_db)):
+
+    db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
+    if not db_folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
     
+    return db_folder
+
+@app.post("/manage-file/")
+def save_folder(files):
+    print(files)
 
 # uvicorn server:app --reload  to run fastAPI
