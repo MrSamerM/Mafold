@@ -7,7 +7,6 @@ import axios from 'axios';
 
 export default function Munch() {
 
-    const formData = new FormData();
     const [files, setFiles] = useState([])
 
 
@@ -31,7 +30,7 @@ export default function Munch() {
             formData.append('uuid', f.id);             // append the UUID
 
             try {
-                await axios.post('http://localhost:8000/manage-file', formData, {
+                await axios.post('http://localhost:8000/manage-file/', formData, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
                 console.log(`Uploaded file ${f.file.name} with UUID ${f.id} successfully`);
@@ -81,7 +80,7 @@ export default function Munch() {
                     }
                     <button onClick={(e) => {
                         e.stopPropagation();
-                        handleFile;
+                        handleFile();
                     }}>
                         Save information
                     </button>

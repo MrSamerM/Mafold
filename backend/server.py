@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException,Body
+from fastapi import FastAPI, Depends, HTTPException,File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import tkinter as tk
@@ -10,6 +10,12 @@ import schemas
 from database import SessionLocal, engine
 from sqlalchemy.exc import IntegrityError
 from typing import List
+import pypandoc
+from pathlib import Path
+from collections import defaultdict
+import ollama
+
+
 
 load_dotenv()
 app = FastAPI()
@@ -153,7 +159,65 @@ async def delete_folder(folder_id: int,db: Session = Depends(get_db)):
     return db_folder
 
 @app.post("/manage-file/")
-def save_folder(files):
-    print(files)
+async def save_folder(file: UploadFile = File(...), uuid: str = Form(...),db: Session = Depends(get_db)):
+    
+    requirements = db.query(models.Requirement).all()
+    grouped_requirements = defaultdict(list)
+    for r in requirements:
+        grouped_requirements[r.folder_id].append({
+            "id": r.id,
+            "description": r.description
+        })
+
+    grouped_list = [
+        {"folder_id": folder_id, "requirements": reqs}
+        for folder_id, reqs in grouped_requirements.items()
+    ]
+    print(grouped_list)
+
+    raw_bytes = await file.read() #read file
+    md_text = raw_bytes.decode("utf-8") #decode it
+    converted = pypandoc.convert_text(md_text, to="rst", format="md") #convert to md
+
+
+    prompt = f"""
+    Does this file meet ALL requirements for any folder_id? Answer with folder_id or N/A only.
+
+    File: {converted}
+    Requirements: {grouped_list}
+
+    Rules:
+    - File must satisfy EVERY requirement in a group to match
+    - Return only the matching folder_id
+    - If multiple complete matches exist, return the folder_id with the most requirements
+    - If the number of complete macthes are the same, then return the first folder_id
+    - If no complete matches, return N/A
+
+    Examples:
+    - If file meets all requirements for folder_3: return "folder_3"
+    - If no folder has all requirements met: return "N/A"
+    - If both folder_1 (3 reqs) and folder_2 (5 reqs) are complete matches: return "folder_2"
+    - If both folder_1 (3 reqs) and folder_2 (3 reqs) are complete matches: return the first folder
+    """
+        
+    response = ollama.generate(
+            model='llama3.2:3b',
+            prompt=prompt
+        )
+    print(response["response"])
+    if response["response"] =="N/A":
+        target_dir = Path('#######')
+    else:
+        db_folder = db.query(models.Folder).filter(models.Folder.id == response["response"]).first()
+        folder_path=db_folder.folder_path
+        target_dir = Path(folder_path)
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    dest_path = target_dir / f"{file.filename}"
+
+    with dest_path.open("wb") as f:
+        f.write(await file.read())
+
+    return {"message": "File saved"}
 
 # uvicorn server:app --reload  to run fastAPI

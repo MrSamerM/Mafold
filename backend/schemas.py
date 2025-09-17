@@ -9,6 +9,7 @@ class RequirementCreate(BaseModel): #input
 class Requirement(BaseModel): #output
     id: int
     description: str
+    folder_id: int
 
     class Config:
         orm_mode = True
