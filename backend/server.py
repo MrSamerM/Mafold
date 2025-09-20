@@ -6,6 +6,7 @@ from tkinter import filedialog
 import os
 from sqlalchemy.orm import Session
 import models
+from file_converter.md_converter import get_converter
 import schemas
 from database import SessionLocal, engine
 from sqlalchemy.exc import IntegrityError
@@ -14,6 +15,7 @@ import pypandoc
 from pathlib import Path
 from collections import defaultdict
 import ollama
+import json
 
 
 
@@ -162,61 +164,81 @@ async def delete_folder(folder_id: int,db: Session = Depends(get_db)):
 async def save_folder(file: UploadFile = File(...), uuid: str = Form(...),db: Session = Depends(get_db)):
     
     requirements = db.query(models.Requirement).all()
-    grouped_requirements = defaultdict(list)
+    req_map={}
+    ids=set()
     for r in requirements:
-        grouped_requirements[r.folder_id].append({
-            "id": r.id,
-            "description": r.description
-        })
+        if r.folder_id not in req_map:
+            req_map[r.folder_id]=[]
 
-    grouped_list = [
-        {"folder_id": folder_id, "requirements": reqs}
-        for folder_id, reqs in grouped_requirements.items()
-    ]
-    print(grouped_list)
+        req_map[r.folder_id].append(r.description)
+        ids.add(r.folder_id)
 
-    raw_bytes = await file.read() #read file
-    md_text = raw_bytes.decode("utf-8") #decode it
-    converted = pypandoc.convert_text(md_text, to="rst", format="md") #convert to md
+    
+    converter = get_converter(file) #this gets the class it mataches
+    converted = await converter.convert_to_md()#Then run the convert to md method. All the same
 
+
+    req_map_json = json.dumps(
+        {str(k): list(v) for k, v in req_map.items()},
+        indent=2,
+        sort_keys=True
+    )
 
     prompt = f"""
-    Does this file meet ALL requirements for any folder_id? Answer with folder_id or N/A only.
+    You are a strict requirements checker and a context analyzer.
 
-    File: {converted}
-    Requirements: {grouped_list}
+    RULES:
+    - A folder qualifies ONLY if **EVERY** requirement listed for that folder_id is satisfied.
+    - Ignore letter casing unless specified.
+    - Only check the requirements listed for each folder_id. Do not apply requirements from one folder_id to another.
+    - If a requirement says “must be a <document>” (CV, letter, etc.), consider it satisfied if the file contains content typical for that type for example:
+        - CV: Education, Work Experience, Skills etc.
+        - Letter: Greeting, body text, closing etc.
+        - Newspaper article: Headline, byline, body etc.
+    - If multiple folders qualify, choose the one with the most requirements.
+    - If still tied, choose the lowest numeric folder_id.
+    - If no folder qualifies, output "N/A".
 
-    Rules:
-    - File must satisfy EVERY requirement in a group to match
-    - Return only the matching folder_id
-    - If multiple complete matches exist, return the folder_id with the most requirements
-    - If the number of complete macthes are the same, then return the first folder_id
-    - If no complete matches, return N/A
+    INPUT:
+    --- FILE CONTENT ---
+    {converted}
+    --- END FILE CONTENT ---
 
-    Examples:
-    - If file meets all requirements for folder_3: return "folder_3"
-    - If no folder has all requirements met: return "N/A"
-    - If both folder_1 (3 reqs) and folder_2 (5 reqs) are complete matches: return "folder_2"
-    - If both folder_1 (3 reqs) and folder_2 (3 reqs) are complete matches: return the first folder
+    --- REQUIREMENTS (JSON) ---
+    {req_map_json}
+    --- END REQUIREMENTS ---
+
+    OUTPUT:
+    - Respond with **only** the folder_id of the qualifying folder, or "N/A" if none qualify.
     """
-        
+
     response = ollama.generate(
-            model='llama3.2:3b',
-            prompt=prompt
+            # model='llama3.2:3b',
+            model='mistral:7b-instruct',
+            prompt=prompt,
+            options={"temperature": 0}
         )
+
     print(response["response"])
-    if response["response"] =="N/A":
-        target_dir = Path('#######')
+    output=response["response"].strip()
+
+    if output.upper() =="N/A":
+        target_dir = Path('')
     else:
-        db_folder = db.query(models.Folder).filter(models.Folder.id == response["response"]).first()
-        folder_path=db_folder.folder_path
-        target_dir = Path(folder_path)
+        folder_id = int(output)
+        db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
+        if not db_folder:
+            raise ValueError(f"No folder found for id {folder_id}")
+        target_dir = Path(db_folder.folder_path)
 
     target_dir.mkdir(parents=True, exist_ok=True)
     dest_path = target_dir / f"{file.filename}"
 
+    file.file.seek(0)
+    raw_bytes = await file.read()
     with dest_path.open("wb") as f:
-        f.write(await file.read())
+        f.write(raw_bytes)
+
 
     return {"message": "File saved"}
 

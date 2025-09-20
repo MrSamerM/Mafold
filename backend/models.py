@@ -10,9 +10,11 @@ class Folder(Base):
     folder_name = Column(String, index=True)
     folder_path = Column(String, index=True)
 
-    # One-to-many: a folder has many requirements
-    requirements = relationship("Requirement", back_populates="folder")
-
+    requirements = relationship(
+            "Requirement",
+            back_populates="folder",
+            cascade="all, delete-orphan"
+        )
 
 class Requirement(Base):
     __tablename__ = "requirements"

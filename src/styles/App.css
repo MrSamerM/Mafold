@@ -35,16 +35,12 @@ body {
 
 
 /* Responsive: stack sidebar on top for small screens */
-@media (max-width: 768px) {
-  .app {
-    flex-direction: column;
+@media (max-width: 721px) {
+  .main-content {
+    width: 100%;
   }
 
   .sidebar {
-    width: 100%;
-  }
-
-  .main-content {
-    width: 100%;
+    display: none;
   }
 }
