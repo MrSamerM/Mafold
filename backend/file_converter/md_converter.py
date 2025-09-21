@@ -2,6 +2,7 @@ import pypandoc
 from docx2md import convert as convert_doc
 from io import BytesIO #This library converts the in memory in bytes
 from pptx2md import convert as convert_ppx, ConversionConfig
+import pdfplumber
 import tempfile
 import pandas as pd
 import os
@@ -32,12 +33,12 @@ class Ppx:
     async def convert_to_md (self):
         raw_bytes = await self.file.read()
 
-        with tempfile.NamedTemporaryFile(suffix=".pptx") as tmp:
+        with tempfile.NamedTemporaryFile(suffix=".pptx",delete=False) as tmp:
             tmp.write(raw_bytes)
             tmp.flush()
-            config = ConversionConfig(disable_notes=True)
         try:
-            markdown = convert_ppx(tmp.name, config)
+            config = ConversionConfig(disable_notes=True)
+            markdown = convert_ppx(tmp.name, config=config)
         finally:
             os.remove(tmp.name)
 
@@ -76,10 +77,14 @@ class Pdf:
             tmp.write(raw_bytes)
             tmp.flush()
         try:
-            md_text = pypandoc.convert_file(tmp.name, to="md", extra_args=["--standalone"])
+            md_text = ""
+            with pdfplumber.open(tmp.name) as pdf:
+                for i, page in enumerate(pdf.pages, start=1):
+                    page_text = page.extract_text()
+                    if page_text:
+                        md_text += f"\n--- Page {i} ---\n{page_text}\n"
         finally:
             os.remove(tmp.name)
-
         return md_text
 
 def get_converter(input_file):
