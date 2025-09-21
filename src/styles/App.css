@@ -35,12 +35,8 @@ body {
 
 
 /* Responsive: stack sidebar on top for small screens */
-@media (max-width: 721px) {
+@media (max-width: 800px) {
   .main-content {
     width: 100%;
-  }
-
-  .sidebar {
-    display: none;
   }
 }

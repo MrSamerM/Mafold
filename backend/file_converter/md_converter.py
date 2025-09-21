@@ -36,7 +36,10 @@ class Ppx:
             tmp.write(raw_bytes)
             tmp.flush()
             config = ConversionConfig(disable_notes=True)
+        try:
             markdown = convert_ppx(tmp.name, config)
+        finally:
+            os.remove(tmp.name)
 
         return markdown
 
@@ -51,6 +54,33 @@ class Csv:
         md_text = df.to_markdown(tablefmt="grid")
         return md_text
     
+class Xls:
+    def __init__(self, file):
+        self.file = file
+
+    async def convert_to_md(self):
+        raw_bytes = await self.file.read()
+        buffer = BytesIO(raw_bytes)
+        df = pd.read_excel(buffer)
+        md_text = df.to_markdown(tablefmt="grid")
+        return md_text
+    
+class Pdf:
+    def __init__(self, file):
+        self.file = file
+
+    async def convert_to_md(self):
+        raw_bytes = await self.file.read()
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp.write(raw_bytes)
+            tmp.flush()
+        try:
+            md_text = pypandoc.convert_file(tmp.name, to="md", extra_args=["--standalone"])
+        finally:
+            os.remove(tmp.name)
+
+        return md_text
 
 def get_converter(input_file):
     filename = input_file.filename  # works for FastAPI UploadFile
@@ -64,5 +94,9 @@ def get_converter(input_file):
         return Ppx(input_file)
     elif ext == "csv":
         return Csv(input_file)
+    elif ext == "xls" or ext== 'xlsx':
+        return Xls(input_file)
+    elif ext == "pdf":
+        return Pdf(input_file)
     else:
         raise ValueError(f"Unsupported file type: {ext}")

@@ -200,6 +200,8 @@ async def save_folder(file: UploadFile = File(...), uuid: str = Form(...),db: Se
     - If no folder qualifies, output "N/A".
 
     INPUT:
+
+    File name: {file.filename}
     --- FILE CONTENT ---
     {converted}
     --- END FILE CONTENT ---
@@ -223,7 +225,7 @@ async def save_folder(file: UploadFile = File(...), uuid: str = Form(...),db: Se
     output=response["response"].strip()
 
     if output.upper() =="N/A":
-        target_dir = Path('')
+        target_dir = Path('C:/Users/Samer/OneDrive - Brunel University London/Desktop/Flop')
     else:
         folder_id = int(output)
         db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
