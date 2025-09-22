@@ -1,7 +1,7 @@
 import pypandoc
-from docx2md import convert as convert_doc
+import docx2md
 from io import BytesIO #This library converts the in memory in bytes
-from pptx2md import convert as convert_ppx, ConversionConfig
+from pptx2md import convert, ConversionConfig
 import pdfplumber
 import tempfile
 import pandas as pd
@@ -14,17 +14,23 @@ class Txt:
     async def convert_to_md (self):
          raw_bytes = await self.file.read() #read file
          md_text = raw_bytes.decode("utf-8") #encode it
-         converted = pypandoc.convert_text(md_text, to="md", format="markdown",extra_args=["--standalone"]) #convert to md
+         converted = pypandoc.convert_text(md_text, to="md", format="markdown",extra_args=["--standalone"])
          return converted
     
 class Docx:
     def __init__(self,file):
-        self.file=file
+        self.file = file
     
-    async def convert_to_md (self):
+    async def convert_to_md(self):
         raw_bytes = await self.file.read()
-        buffer = BytesIO(raw_bytes) #this treats it like a file that you can read and write into
-        return convert_doc(buffer)
+        with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp:
+            tmp.write(raw_bytes)
+            tmp.flush()
+        try:
+            md_text =docx2md.do_convert(tmp.name)
+        finally:
+            os.remove(tmp.name)
+        return md_text
 
 class Ppx:
     def __init__(self,file):
@@ -36,12 +42,25 @@ class Ppx:
         with tempfile.NamedTemporaryFile(suffix=".pptx",delete=False) as tmp:
             tmp.write(raw_bytes)
             tmp.flush()
+        
+        tmp_md = tempfile.NamedTemporaryFile(suffix=".md", delete=False)
+        tmp_md.close()
+
+        tmp_img_dir = tempfile.TemporaryDirectory()
         try:
-            config = ConversionConfig(disable_notes=True)
-            markdown = convert_ppx(tmp.name, config=config)
+            config = ConversionConfig(
+                pptx_path=tmp.name,
+                output_path=tmp_md.name,
+                image_dir=tmp_img_dir.name,
+                disable_notes=True
+                )
+            markdown = convert(config)
+            with open(tmp_md.name, "r", encoding="utf-8") as f:
+                markdown = f.read()
         finally:
             os.remove(tmp.name)
-
+            os.remove(tmp_md.name)
+            tmp_img_dir.cleanup()
         return markdown
 
 class Csv:
@@ -88,8 +107,8 @@ class Pdf:
         return md_text
 
 def get_converter(input_file):
-    filename = input_file.filename  # works for FastAPI UploadFile
-    ext = filename.split(".")[-1].lower() #the last of the split
+    filename = input_file.filename
+    ext = filename.split(".")[-1].lower()
 
     if ext == "txt":
         return Txt(input_file)

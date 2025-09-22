@@ -11,15 +11,16 @@ import schemas
 from database import SessionLocal, engine
 from sqlalchemy.exc import IntegrityError
 from typing import List
-import pypandoc
 from pathlib import Path
-from collections import defaultdict
 import ollama
 import json
+from dotenv import load_dotenv
 
 
 
 load_dotenv()
+na_requirements = os.getenv("NA_PATH")
+
 app = FastAPI()
 
 models.Base.metadata.create_all(bind=engine) #creates the database tables
@@ -183,6 +184,7 @@ async def save_folder(file: UploadFile = File(...), uuid: str = Form(...),db: Se
         indent=2,
         sort_keys=True
     )
+    ext = file.filename.split(".")[-1].lower() #the last of the split
 
     prompt = f"""
     You are a strict requirements checker and a context analyzer.
@@ -201,7 +203,7 @@ async def save_folder(file: UploadFile = File(...), uuid: str = Form(...),db: Se
 
     INPUT:
 
-    File name: {file.filename}
+    File extension: .{ext}
     --- FILE CONTENT ---
     {converted}
     --- END FILE CONTENT ---
@@ -211,9 +213,13 @@ async def save_folder(file: UploadFile = File(...), uuid: str = Form(...),db: Se
     --- END REQUIREMENTS ---
 
     OUTPUT:
-    - Respond with **only** the folder_id of the qualifying folder, or "N/A" if none qualify.
+    - Respond **exactly** with the folder_id of the qualifying folder or "N/A".
+    - Do **not** provide any explanations, reasoning, or extra text.  
+    - Example valid output: 1
+    - Example valid output: N/A
     """
 
+    print(prompt)
     response = ollama.generate(
             # model='llama3.2:3b',
             model='mistral:7b-instruct',
@@ -225,7 +231,7 @@ async def save_folder(file: UploadFile = File(...), uuid: str = Form(...),db: Se
     output=response["response"].strip()
 
     if output.upper() =="N/A":
-        target_dir = Path('C:/Users/Samer/OneDrive - Brunel University London/Desktop/Flop')
+        target_dir = Path(na_requirements)
     else:
         folder_id = int(output)
         db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
