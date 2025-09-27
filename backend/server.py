@@ -1,8 +1,6 @@
-from fastapi import FastAPI, Depends, HTTPException,File, Form, UploadFile
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-import tkinter as tk
-from tkinter import filedialog
 import os
 from sqlalchemy.orm import Session
 import models
@@ -15,7 +13,7 @@ from pathlib import Path
 import ollama
 import json
 from dotenv import load_dotenv
-
+from pydantic import BaseModel
 
 
 load_dotenv()
@@ -40,23 +38,6 @@ def get_db():
         yield db #here yield make get_db a generator function
     finally:
         db.close() #after all is done, then it closes the db
-
-
-
-@app.get("/pick-folder")
-@app.get("/pick-folder")
-def pick_folder():
-    root = tk.Tk()
-    root.withdraw()  # hide main window
-    root.attributes('-topmost', True)
-    folder_selected = filedialog.askdirectory() 
-    root.destroy()
-    if folder_selected:
-        folder_name = os.path.basename(folder_selected)
-        return {"folderName": folder_name, "folderPath": folder_selected}
-    
-    return {"folderName": None, "folderPath": None}
-
 
 
 # Schemas vs Models
@@ -120,7 +101,7 @@ def get_folders(db: Session = Depends(get_db)):
 
 @app.put("/edit/{folder_id}")
 async def update_folder(folder_id: int,folder_in: schemas.FolderCreate,db: Session = Depends(get_db)):
-    
+
     db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
     if not db_folder:
         raise HTTPException(status_code=404, detail="Folder not found")
@@ -161,8 +142,14 @@ async def delete_folder(folder_id: int,db: Session = Depends(get_db)):
     
     return db_folder
 
+
+class FileInformation(BaseModel):
+    uuid: str
+    name: str
+    path: str
+
 @app.post("/manage-file/")
-async def save_folder(file: UploadFile = File(...), uuid: str = Form(...),db: Session = Depends(get_db)):
+async def save_folder(file: FileInformation, db: Session = Depends(get_db)):
     
     requirements = db.query(models.Requirement).all()
     req_map={}
@@ -174,8 +161,9 @@ async def save_folder(file: UploadFile = File(...), uuid: str = Form(...),db: Se
         req_map[r.folder_id].append(r.description)
         ids.add(r.folder_id)
 
-    
-    converter = get_converter(file) #this gets the class it mataches
+    full_path=file.path
+    file_name=file.name
+    converter = get_converter(full_path,file_name) #this gets the class it mataches
     converted = await converter.convert_to_md()#Then run the convert to md method. All the same
 
 
@@ -184,8 +172,8 @@ async def save_folder(file: UploadFile = File(...), uuid: str = Form(...),db: Se
         indent=2,
         sort_keys=True
     )
-    ext = file.filename.split(".")[-1].lower() #the last of the split
-
+    ext = file_name.split(".")[-1].lower() #the last of the split
+    print(converted)
     prompt = f"""
     You are a strict requirements checker and a context analyzer.
 
@@ -230,23 +218,19 @@ async def save_folder(file: UploadFile = File(...), uuid: str = Form(...),db: Se
     print(response["response"])
     output=response["response"].strip()
 
+
     if output.upper() =="N/A":
-        target_dir = Path(na_requirements)
+        target_dir = str(Path(na_requirements)/file_name)
+        original_path = str(Path(full_path))
+        os.replace(original_path,target_dir)
     else:
         folder_id = int(output)
         db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
         if not db_folder:
             raise ValueError(f"No folder found for id {folder_id}")
-        target_dir = Path(db_folder.folder_path)
-
-    target_dir.mkdir(parents=True, exist_ok=True)
-    dest_path = target_dir / f"{file.filename}"
-
-    file.file.seek(0)
-    raw_bytes = await file.read()
-    with dest_path.open("wb") as f:
-        f.write(raw_bytes)
-
+        target_dir = str(Path(db_folder.folder_path)/file_name)
+        original_path = str(Path(full_path))
+        os.replace(original_path,target_dir)
 
     return {"message": "File saved"}
 

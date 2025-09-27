@@ -38,12 +38,19 @@ export default function AddFolders() {
     }, [])
 
     const handleSelection = async () => {
+        const selectedPath = await window.electron.selectDirectoryPath();
+        console.log(selectedPath)
 
-        const res = await axios.get('http://localhost:8000/pick-folder')
-        if (res.data.folderName) {
-            setFolderName(res.data.folderName)
-            setFolderPath(res.data.folderPath)
-        }
+        if (!selectedPath) return; // user cancelled
+
+        const pythonPath = selectedPath.replace(/\\/g, '/');
+        console.log(pythonPath)
+
+        const folderOnlyName = selectedPath.split(/[\\/]/).pop();
+        console.log(folderOnlyName)
+
+        setFolderName(folderOnlyName);
+        setFolderPath(pythonPath);
     };
 
     const handleRequirementChange = (index, value) => {
@@ -70,7 +77,7 @@ export default function AddFolders() {
 
         } catch (e) {
             console.log("Error when saving", e)
-            alert("Internal Error!");
+            alert("Internal Error! Make sure the folder has not been used before");
         }
 
     };
