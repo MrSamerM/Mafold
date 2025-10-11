@@ -1,10 +1,13 @@
 import pypandoc
-import docx2md
-from pptx2md import convert, ConversionConfig
+# import docx2md
+# from pptx2md import convert, ConversionConfig
 import pdfplumber
 import tempfile
 import pandas as pd
 import os
+from docx2pdf import convert as cv
+from pptx import Presentation
+
 
 class Txt:
     def __init__(self,file):
@@ -21,8 +24,24 @@ class Docx:
         self.file = file
     
     async def convert_to_md(self):
-        md_text =docx2md.do_convert(self.file)
-        return md_text
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp_path = tmp.name
+        
+        try:
+            cv(self.file, tmp_path)
+            
+            md_text = ""
+            with pdfplumber.open(tmp_path) as pdf:
+                for i, page in enumerate(pdf.pages, start=1):
+                    page_text = page.extract_text()
+                    if page_text:
+                        md_text += f"\n--- Page {i} ---\n{page_text}\n"
+            
+            return md_text
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
 class Ppx:
     def __init__(self,file):
@@ -30,24 +49,16 @@ class Ppx:
     
     async def convert_to_md (self):
 
-        tmp_md = tempfile.NamedTemporaryFile(suffix=".md", delete=False)
-        tmp_md.close()
-        tmp_img_dir = tempfile.TemporaryDirectory()
+        prs = Presentation(self.file)        
+        md_text = ""
+        for slide_num, slide in enumerate(prs.slides, start=1):
+            md_text += f"--- Page {slide_num} ---\n"
+            
+            for shape in slide.shapes:
+                if hasattr(shape, "text") and shape.text.strip():
+                    md_text += f"{shape.text.strip()}\n"
         
-        try:
-            config = ConversionConfig(
-                pptx_path=self.file,
-                output_path=tmp_md.name,
-                image_dir=tmp_img_dir.name,
-                disable_notes=True
-                )
-            markdown = convert(config)
-            with open(tmp_md.name, "r", encoding="utf-8") as f:
-                markdown = f.read()
-        finally:
-            os.remove(tmp_md.name)
-            tmp_img_dir.cleanup()
-        return markdown
+        return md_text
 
 class Csv:
     def __init__(self, file):

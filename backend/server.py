@@ -185,6 +185,7 @@ async def save_folder(file: FileInformation, db: Session = Depends(get_db)):
         - CV: Education, Work Experience, Skills etc.
         - Letter: Greeting, body text, closing etc.
         - Newspaper article: Headline, byline, body etc.
+    - If requirment is about page numbers, you can see the content in each page number written something like this ---Page 1---
     - If multiple folders qualify, choose the one with the most requirements.
     - If still tied, choose the lowest numeric folder_id.
     - If no folder qualifies, output "N/A".
@@ -201,7 +202,8 @@ async def save_folder(file: FileInformation, db: Session = Depends(get_db)):
     --- END REQUIREMENTS ---
 
     OUTPUT:
-    - Respond **exactly** with the folder_id of the qualifying folder or "N/A".
+    - Respond exactly with the folder_id of the qualifying folder as a raw number (no quotes, no formatting).
+    - If no folder qualifies, respond exactly with N/A (no quotes).    
     - Do **not** provide any explanations, reasoning, or extra text.  
     - Example valid output: 1
     - Example valid output: N/A
