@@ -81,7 +81,7 @@ export default function Munch() {
                         ))}
 
                     <button onClick={(e) => { e.stopPropagation(); handleFile(); }}>
-                        Save information
+                        Manage
                     </button>
                 </div>
             </div>

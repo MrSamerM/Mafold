@@ -14,7 +14,7 @@ import ollama
 import json
 from dotenv import load_dotenv
 from pydantic import BaseModel
-
+import json
 
 load_dotenv()
 na_requirements = os.getenv("NA_PATH")
@@ -150,7 +150,7 @@ class FileInformation(BaseModel):
 
 @app.post("/manage-file/")
 async def save_folder(file: FileInformation, db: Session = Depends(get_db)):
-    
+
     requirements = db.query(models.Requirement).all()
     req_map={}
     ids=set()
@@ -164,7 +164,7 @@ async def save_folder(file: FileInformation, db: Session = Depends(get_db)):
     full_path=file.path
     file_name=file.name
     converter = get_converter(full_path,file_name) #this gets the class it mataches
-    converted = await converter.convert_to_md()#Then run the convert to md method. All the same
+    content = await converter.convert_to_md()#Then run the convert to md method. All the same
 
 
     req_map_json = json.dumps(
@@ -173,67 +173,232 @@ async def save_folder(file: FileInformation, db: Session = Depends(get_db)):
         sort_keys=True
     )
     ext = file_name.split(".")[-1].lower() #the last of the split
-    print(converted)
+    print(content)
+    # prompt = f"""
+    # You are a strict requirements checker and a context analyzer.
+
+    # RULES:
+    # - A folder qualifies ONLY if **EVERY** requirement listed for that folder_id is satisfied.
+    # - Ignore letter casing unless specified.
+    # - Only check the requirements listed for each folder_id. Do not apply requirements from one folder_id to another.
+    # - If a requirement says “must be a <document>” (CV, letter, etc.), consider it satisfied if the file contains content typical for that type for example:
+    #     - CV: Education, Work Experience, Skills etc.
+    #     - Letter: Greeting, body text, closing etc.
+    #     - Newspaper article: Headline, byline, body etc.
+    # - If requirment is about page numbers, you can see the content in each page number written something like this ---Page 1---
+    # - If multiple folders qualify, choose the one with the most requirements.
+    # - If still tied, choose the lowest numeric folder_id.
+    # - If no folder qualifies, output "N/A".
+
+    # INPUT:
+    # --- FILE DETAILS ---
+
+    # File extension: .{ext}
+    # File name: {file_name}
+    # --- END FILE DETAILS ---
+ 
+
+    # --- FILE CONTENT ---
+    # {converted}
+    # --- END FILE CONTENT ---
+
+    # --- REQUIREMENTS (JSON) ---
+    # {req_map_json}
+    # --- END REQUIREMENTS ---
+
+    # OUTPUT:
+    # - Respond exactly with the folder_id of the qualifying folder as a raw number (no quotes, no formatting).
+    # - If no folder qualifies, respond exactly with N/A (no quotes).    
+    # - Do **not** provide any explanations, reasoning, or extra text.  
+    # - Example valid output: 1
+    # - Example valid output: N/A
+    # """
+
+    # print(prompt)
+    # response = ollama.generate(
+    #         # model='llama3.2:3b',
+    #         model='mistral:7b-instruct',
+    #         prompt=prompt,
+    #         options={"temperature": 0}
+    #     )
+
+    # prompt = f"""
+
+
+    # You are a deterministic file classifier.
+
+    # Before giving the final answer, you MUST internally:
+    # 1. Evaluate each requirement EXACTLY as written.
+    # 2. Create a hidden checklist for EACH folder_id.
+    # 3. Mark EACH requirement as PASS or FAIL.
+    # 4. Only folders with ALL PASS qualify.
+
+    # You MUST still output ONLY the final number or N/A at the end with no explanations.
+
+    # -----
+
+    # FILE:
+    # - Extension: .{ext}
+    # - Name: {file_name}
+
+    # CONTENT:
+    # {converted}
+
+    # -----
+
+    # REQUIREMENTS:
+    # {req_map_json}
+
+
+    # RULES:
+    # - ALL requirements must be satisfied (logical AND)
+    # - Ignore case
+    # - Page numbers appear as ---Page N---
+    # - If multiple qualify: choose the one with the MOST requirements, then LOWEST folder_id
+    # - If none qualify: output N/A
+
+    # FINAL ANSWER FORMAT:
+    # Output ONLY the folder_id number (e.g., 5) or N/A.
+
+    # THINK CLEARLY AND DO NOT GUESS.
+    # """
+
+
     prompt = f"""
-    You are a strict requirements checker and a context analyzer.
+    You are a **STRICT, DETERMINISTIC** rule-checking classification engine.
+    Your sole job is to evaluate user-written requirements against file data.
+    You **MUST** follow the instructions below exactly.
 
-    RULES:
-    - A folder qualifies ONLY if **EVERY** requirement listed for that folder_id is satisfied.
-    - Ignore letter casing unless specified.
-    - Only check the requirements listed for each folder_id. Do not apply requirements from one folder_id to another.
-    - If a requirement says “must be a <document>” (CV, letter, etc.), consider it satisfied if the file contains content typical for that type for example:
-        - CV: Education, Work Experience, Skills etc.
-        - Letter: Greeting, body text, closing etc.
-        - Newspaper article: Headline, byline, body etc.
-    - If requirment is about page numbers, you can see the content in each page number written something like this ---Page 1---
-    - If multiple folders qualify, choose the one with the most requirements.
-    - If still tied, choose the lowest numeric folder_id.
-    - If no folder qualifies, output "N/A".
+    ============================================================
+    FILE DATA (STRICT LITERAL VALUES)
+    - EXTENSION_LITERAL: {ext}
+    - FILENAME_LITERAL: {file_name}
 
-    INPUT:
+    CONTENT (Literal text between markers):
+    ---- CONTENT START ----
+    {content}
+    ---- CONTENT END ----
 
-    File extension: .{ext}
-    --- FILE CONTENT ---
-    {converted}
-    --- END FILE CONTENT ---
+    ============================================================
+    REQUIREMENTS FORMAT
+    The REQUIREMENTS object is a JSON mapping:
+    folder_id (string) → array of requirement sentences.
 
-    --- REQUIREMENTS (JSON) ---
-    {req_map_json}
-    --- END REQUIREMENTS ---
+    Example:
+    "3": ["Must contain Baba"],
+    "4": ["Must have 2 pages"],
+    "5": ["Must be a txt file", "Filename must contain CV"]
 
-    OUTPUT:
-    - Respond exactly with the folder_id of the qualifying folder as a raw number (no quotes, no formatting).
-    - If no folder qualifies, respond exactly with N/A (no quotes).    
-    - Do **not** provide any explanations, reasoning, or extra text.  
-    - Example valid output: 1
-    - Example valid output: N/A
-    """
 
+    Each array represents the FULL list of requirements for that folder.
+    A folder qualifies ONLY if **ALL** requirements in its array are satisfied.
+    This is **STRICT AND LOGIC**.
+
+    ============================================================
+    CRITICAL RULES FOR EVALUATION
+    These rules **MUST** be applied during your internal process and reflected in your reasoning.
+
+    1.  **DATA SOURCE CHECK:**
+        * If a requirement specifies the **FILE NAME** (e.g., "The file name must...") you **MUST ONLY** check the **FILENAME_LITERAL** string. **DO NOT** check the CONTENT.
+        * If a requirement specifies the **CONTENT** (e.g., "Must contain...") you **MUST ONLY** check the CONTENT text. **DO NOT** check the FILENAME_LITERAL.
+        
+    2.  **LITERAL MATCHING:**
+        * The file name check **MUST** be a literal, character-for-character substring match. **Do not use auto-correction, semantic substitution, or fuzzy matching.**
+        
+    3.  **FAILURE CONDITION:**
+        * **DO NOT GUESS**. If unsure, or if the requirement's target data (Name vs. Content) is ambiguously satisfied by another data point, mark the requirement as **FAIL**.
+
+    ============================================================
+    YOUR INTERNAL PROCESS (MUST BE FOLLOWED)
+
+    1.  For each folder_id, check every requirement using the **CRITICAL RULES FOR EVALUATION**.
+    2.  Determine which folders, if any, have **ALL** requirements marked PASS.
+    3.  Apply the final selection logic:
+        * If multiple folders qualify: Choose the folder with the MOST requirements, or the LOWEST folder\_id if tied.
+        * If none qualify: result = N/A.
+
+    ============================================================
+    FINAL ANSWER FORMAT (CRITICAL)
+    Output **ONLY** a single JSON object containing your step-by-step reasoning and the final result.
+
+    If a folder qualifies, the format must be:
+    ```json
+    {{
+    "reasoning": [
+        "Evaluated Folder [ID_A]: All requirements passed.",
+        "Evaluated Folder [ID_B]: Requirement '...' failed because [reason].",
+        "Final Logic: Folder [ID_A] was the only folder to qualify OR was chosen based on tie-breaker rules."
+    ],
+    "folder_id": "[ID_A]"
+    }}
+    If the result is N/A, the format must be:
+
+    JSON
+
+    {{
+    "reasoning": [
+        "Evaluated Folder [ID_A]: All requirements failed.",
+        "Evaluated Folder [ID_B]: All requirements failed.",
+        "Final Logic: No folders qualified."
+    ],
+    "folder_id": "N/A"
+    }}
+    NO extra text. NO preceding or trailing text. OUTPUT ONLY THE JSON OBJECT.
+
+    ============================================================
+
+    REQUIREMENTS: {req_map_json} """
+
+    response = ollama.chat(
+        model='llama3:8b',
+        messages=[
+            {
+                'role': 'system',
+                'content': 'You are a file classification system. You output only folder IDs or N/A, nothing else.'
+            },
+            {
+                'role': 'user',
+                'content': prompt
+            }
+        ],
+        options={
+            "temperature": 0,
+            # "num_predict": 10  # Limit output length
+        }
+    )
     print(prompt)
-    response = ollama.generate(
-            # model='llama3.2:3b',
-            model='mistral:7b-instruct',
-            prompt=prompt,
-            options={"temperature": 0}
-        )
+    output_string = response['message']['content'].strip()
+    print(f"Raw output: '{output_string}'")
 
-    print(response["response"])
-    output=response["response"].strip()
+    llm_result_dict = json.loads(output_string)
+    output = llm_result_dict.get("folder_id", None)
 
+    try:
 
-    if output.upper() =="N/A":
-        target_dir = str(Path(na_requirements)/file_name)
-        original_path = str(Path(full_path))
-        os.replace(original_path,target_dir)
-    else:
-        folder_id = int(output)
-        db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
-        if not db_folder:
-            raise ValueError(f"No folder found for id {folder_id}")
-        target_dir = str(Path(db_folder.folder_path)/file_name)
-        original_path = str(Path(full_path))
-        os.replace(original_path,target_dir)
+        if output is None:
+            raise ValueError("LLM output is missing the 'folder_id' key.")
+        if output.upper() =="N/A":
+            target_dir = str(Path(na_requirements)/file_name)
+            original_path = str(Path(full_path))
+            os.replace(original_path,target_dir)
+        else:
+            folder_id = int(output)
+            db_folder = db.query(models.Folder).filter(models.Folder.id == folder_id).first()
+            if not db_folder:
+                raise ValueError(f"No folder found for id {folder_id}")
+            target_dir = str(Path(db_folder.folder_path)/file_name)
+            original_path = str(Path(full_path))
+            os.replace(original_path,target_dir)
 
-    return {"message": "File saved"}
+        return {"message": "File saved"}
+
+    except json.JSONDecodeError:
+        # Handle cases where the LLM output was malformed (e.g., truncated)
+        print("Error: LLM output was not valid JSON and could not be parsed.")
+        return {"message": "Classification Failed: Invalid LLM Output"}
+        
+    except ValueError as e:
+        # Handles errors raised in the 'if not db_folder' block
+        return {"message": f"Classification Failed: {e}"}
 
 # uvicorn server:app --reload  to run fastAPI
