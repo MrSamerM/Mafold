@@ -4,17 +4,24 @@ from pydantic import BaseModel
 from pathlib import Path
 import os
 import json
-import ollama
+# import ollama
 from dotenv import load_dotenv
 import models
 from database import get_db
 from file_converter import get_converter
+from openai import OpenAI
+import re
+
 
 load_dotenv()
 na_requirements = os.getenv("NA_PATH")
 
 router = APIRouter(tags=["files"])
 
+client = OpenAI(
+    api_key=os.getenv("RUNPOD_API_KEY"),
+    base_url=os.getenv("RUNPOD_ENDPOINT")
+)
 
 class FileInformation(BaseModel):
     uuid: str
@@ -120,26 +127,28 @@ async def manage_file(
 
     REQUIREMENTS: {req_map_json}
     """
-
-    response = ollama.chat(
-        model='mistral',
-        messages=[
-            {
-                'role': 'system',
-                'content': 'You are a file classification system. You output only folder IDs or N/A, nothing else.'
-            },
-            {
-                'role': 'user',
-                'content': prompt
-            }
-        ],
-        options={
-            "temperature": 0,
-            "format": "json"
+    response = client.chat.completions.create(
+    model="deepseek-r1:32b",
+    messages=[
+        {
+            "role": "system",
+            "content": "You are a file classification system. You output only folder IDs or N/A, nothing else."
+        },
+        {
+            "role": "user",
+            "content": prompt
         }
-    )
+    ],
+    temperature=0,
+    response_format={"type": "json_object"},
+    timeout=120
+)
+
     print(prompt)
-    output_string = response['message']['content'].strip()
+    # output_string = response['message']['content'].strip()
+    output_string = response.choices[0].message.content.strip()
+    output_string = re.sub(r'<think>.*?</think>', '', output_string, flags=re.DOTALL).strip()
+    output_string = output_string.replace("```json", "").replace("```", "").strip()
     print(f"Raw output: '{output_string}'")
 
     try:
